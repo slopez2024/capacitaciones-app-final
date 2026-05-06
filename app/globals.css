@@ -2,27 +2,88 @@
 @tailwind components;
 @tailwind utilities;
 
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
 @layer base {
   :root {
-    --background: #f8fafc;
-    --foreground: #0f172a;
+    --primary: #6366f1;
+    --primary-dark: #4f46e5;
+    --secondary: #8b5cf6;
+    --accent: #06b6d4;
+    --success: #10b981;
+    --danger: #ef4444;
+    --warning: #f59e0b;
+    --bg: #0f0f1a;
+    --bg-card: #1a1a2e;
+    --bg-card2: #16213e;
+    --text: #f1f5f9;
+    --text-muted: #94a3b8;
+    --border: rgba(255,255,255,0.1);
   }
 
   body {
-    @apply bg-slate-50 text-slate-900 antialiased;
-  }
-
-  * {
-    @apply box-border;
+    @apply antialiased;
+    font-family: 'Inter', system-ui, sans-serif;
+    background-color: var(--bg);
+    color: var(--text);
   }
 }
 
 @layer utilities {
-  .animate-spin-slow {
-    animation: spin 3s linear infinite;
+  .glass {
+    background: rgba(255,255,255,0.05);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.1);
   }
 
-  .ruleta-item {
-    @apply transition-all duration-300;
+  .glass-light {
+    background: rgba(255,255,255,0.95);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(0,0,0,0.05);
   }
+
+  .gradient-primary {
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  }
+
+  .gradient-success {
+    background: linear-gradient(135deg, #10b981, #059669);
+  }
+
+  .gradient-danger {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+  }
+
+  .text-gradient {
+    background: linear-gradient(135deg, #6366f1, #8b5cf6, #06b6d4);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .animate-float {
+    animation: float 3s ease-in-out infinite;
+  }
+
+  .animate-pulse-slow {
+    animation: pulse 3s ease-in-out infinite;
+  }
+
+  .card-admin {
+    @apply bg-white rounded-2xl border border-slate-100 shadow-sm;
+  }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes countdown {
+  from { stroke-dashoffset: 0; }
+  to { stroke-dashoffset: 283; }
+}
+
+.countdown-ring {
+  animation: countdown linear forwards;
 }
