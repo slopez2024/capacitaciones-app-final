@@ -4,58 +4,47 @@ import {useState} from "react"
 import {useRouter} from "next/navigation"
 import {createClient} from "@/lib/supabase/client"
 
-export default function AdminLoginPage(){
+export default function HomePage(){
   const router = useRouter()
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
+  const [code, setCode] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setError("")
+    if(!code.trim())return
     setLoading(true)
-    const supabase = createClient()
-    const {error: authError} = await supabase.auth.signInWithPassword({email, password})
-    if(authError){setError("Email o contrasena incorrectos.");setLoading(false);return}
-    router.push("/admin/dashboard")
-  }
-
-  const handleRegister = async () => {
-    if(!email||!password){setError("Completa email y contrasena.");return}
     setError("")
-    setLoading(true)
     const supabase = createClient()
-    const {error: regError} = await supabase.auth.signUp({email, password})
-    if(regError){setError(regError.message);setLoading(false);return}
-    alert("Cuenta creada. Revisa tu email.")
-    setLoading(false)
+    const {data: events} = await supabase.from("events").select("id,is_active,code").eq("code", parseInt(code.trim())).limit(1)
+    const event = events && events.length > 0 ? events[0] as {id:string;is_active:boolean;code:number} : null
+    if(!event){setError("Codigo incorrecto.");setLoading(false);return}
+    if(!event.is_active){setError("No esta activa.");setLoading(false);return}
+    router.push("/evento/" + event.id)
   }
 
   return(
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-900 via-indigo-800 to-purple-900">
-      <div className="w-full max-w-md">
+    <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-indigo-800 to-purple-900 flex items-center justify-center p-4">
+      <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <span className="text-5xl">🎓</span>
-          <h1 className="text-3xl font-bold text-white mt-4">CapacitApp</h1>
-          <p className="text-indigo-200 mt-1">Panel de capacitadores</p>
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-white/10 rounded-2xl mb-4">
+            <span className="text-3xl">🎓</span>
+          </div>
+          <h1 className="text-2xl font-bold text-white">CapacitApp</h1>
+          <p className="text-indigo-200 text-sm mt-1">Ingresa el codigo de tu capacitacion</p>
         </div>
-        <div className="bg-white rounded-2xl shadow-2xl p-8">
-          <h2 className="text-xl font-semibold text-slate-800 mb-6">Iniciar sesion</h2>
-          <form onSubmit={handleLogin} className="space-y-4">
+        <div className="bg-white rounded-2xl shadow-2xl p-6">
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
-              <input type="email" value={email} onChange={e=>setEmail(e.target.value)} className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="tu@email.com" required/>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Contrasena</label>
-              <input type="password" value={password} onChange={e=>setPassword(e.target.value)} className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="password" required/>
+              <label className="block text-sm font-medium text-slate-700 mb-2">Codigo de capacitacion</label>
+              <input value={code} onChange={e=>setCode(e.target.value.replace(/[^0-9]/g,""))} type="text" inputMode="numeric" maxLength={6} className="w-full border border-slate-200 rounded-lg px-3 py-4 text-4xl font-bold text-center tracking-widest focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="1234" required/>
+              <p className="text-xs text-slate-400 mt-1 text-center">El codigo lo ves en la pantalla del proyector</p>
             </div>
             {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">⚠️ {error}</div>}
-            <button type="submit" disabled={loading} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-lg disabled:opacity-50">{loading?"Cargando...":"Ingresar"}</button>
+            <button type="submit" disabled={loading||code.length<3} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl disabled:opacity-50">{loading?"Buscando...":"Ingresar →"}</button>
           </form>
-          <div className="mt-4 pt-4 border-t border-slate-100">
-            <button onClick={handleRegister} disabled={loading} className="w-full text-sm text-slate-500 hover:text-indigo-600">No tenes cuenta? Registrarte</button>
+          <div className="mt-6 pt-4 border-t border-slate-100 text-center">
+            <button onClick={()=>router.push("/admin")} className="text-sm text-slate-400 hover:text-indigo-600 transition-colors">Soy capacitador →</button>
           </div>
         </div>
       </div>
