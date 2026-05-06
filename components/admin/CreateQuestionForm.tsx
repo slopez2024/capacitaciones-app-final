@@ -93,7 +93,6 @@ export default function QuestionPanel({ eventId }: { eventId: string }) {
 
       {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">⚠️ {error}</div>}
 
-      {/* Pregunta activa */}
       {activeQuestion && (
         <div className="bg-green-50 border-2 border-green-400 rounded-xl p-4">
           <div className="flex items-center justify-between mb-2">
@@ -122,7 +121,6 @@ export default function QuestionPanel({ eventId }: { eventId: string }) {
         </div>
       )}
 
-      {/* Preguntas pendientes */}
       {pendingQuestions.length > 0 && (
         <div className="space-y-2">
           <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Pendientes</p>
@@ -166,7 +164,6 @@ export default function QuestionPanel({ eventId }: { eventId: string }) {
         </div>
       )}
 
-      {/* Preguntas cerradas */}
       {closedQuestions.length > 0 && (
         <div className="space-y-2">
           <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Cerradas</p>
