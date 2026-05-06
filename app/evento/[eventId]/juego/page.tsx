@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, use } from 'react'
+import { useEffect, useState, use, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useActiveQuestion } from '@/lib/hooks/useActiveQuestion'
@@ -10,10 +10,11 @@ export default function JuegoPage({ params }: { params: Promise<{ eventId: strin
   const router = useRouter()
   const { question, loading } = useActiveQuestion(eventId)
   const [attendeeId, setAttendeeId] = useState<string | null>(null)
-  const [answered, setAnswered] = useState<string[]>([])
+  const [answered, setAnswered] = useState<{ [questionId: string]: { optionId?: string; answerText?: string } }>({})
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
   const [selected, setSelected] = useState<string | null>(null)
+  const questionStartTime = useRef<number>(Date.now())
 
   useEffect(() => {
     const id = sessionStorage.getItem(`attendee_${eventId}`)
@@ -24,14 +25,29 @@ export default function JuegoPage({ params }: { params: Promise<{ eventId: strin
   useEffect(() => {
     setSelected(null)
     setError('')
+    questionStartTime.current = Date.now()
   }, [question?.id])
 
-  const alreadyAnswered = question ? answered.includes(question.id) : false
+  const myAnswer = question ? answered[question.id] : null
+  const alreadyAnswered = !!myAnswer
+
+  const isCorrect = () => {
+    if (!question || !myAnswer) return null
+    if (question.type === 'true_false') {
+      return myAnswer.answerText === 'true'
+    } else {
+      const correctOptions = question.question_options.filter(o => o.is_correct).map(o => o.id)
+      return myAnswer.optionId ? correctOptions.includes(myAnswer.optionId) : false
+    }
+  }
 
   const handleAnswer = async (optionId?: string, answerText?: string) => {
     if (!attendeeId || !question || sending || alreadyAnswered) return
     setSending(true)
     setError('')
+
+    const responseTimeMs = Date.now() - questionStartTime.current
+
     const supabase = createClient()
     const { error: err } = await (supabase as unknown as { from: (t: string) => { insert: (d: object) => Promise<{ error: { code: string } | null }> } }).from('answers').insert({
       question_id: question.id,
@@ -39,17 +55,24 @@ export default function JuegoPage({ params }: { params: Promise<{ eventId: strin
       event_id: eventId,
       option_id: optionId || null,
       answer_text: answerText || null,
+      response_time_ms: responseTimeMs,
     })
+
     if (err) {
-      if (err.code === '23505') setAnswered(prev => [...prev, question.id])
-      else setError('Error al enviar respuesta.')
+      if (err.code === '23505') {
+        setAnswered(prev => ({ ...prev, [question.id]: { optionId, answerText } }))
+      } else {
+        setError('Error al enviar respuesta.')
+      }
     } else {
-      setAnswered(prev => [...prev, question.id])
+      setAnswered(prev => ({ ...prev, [question.id]: { optionId, answerText } }))
     }
     setSending(false)
   }
 
   if (!attendeeId) return null
+
+  const correct = isCorrect()
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
@@ -68,10 +91,36 @@ export default function JuegoPage({ params }: { params: Promise<{ eventId: strin
             <p className="text-slate-500 text-sm mt-2">El capacitador no lanzó ninguna pregunta.</p>
           </div>
         ) : alreadyAnswered ? (
-          <div className="text-center">
-            <div className="text-6xl mb-4">✅</div>
-            <h2 className="text-2xl font-bold text-green-700">¡Respuesta enviada!</h2>
-            <p className="text-slate-500 mt-2 text-sm">Esperá la próxima pregunta.</p>
+          <div className="text-center px-4">
+            {question.is_closed ? (
+              <div>
+                <div className="text-7xl mb-4">{correct ? '🎉' : '😔'}</div>
+                <h2 className={`text-3xl font-bold mb-2 ${correct ? 'text-green-600' : 'text-red-500'}`}>
+                  {correct ? '¡Correcto!' : 'Incorrecto'}
+                </h2>
+                {!correct && question.type === 'multiple_choice' && (
+                  <div className="mt-4 bg-green-50 border border-green-200 rounded-xl p-4">
+                    <p className="text-sm text-green-700 font-medium">La respuesta correcta era:</p>
+                    {question.question_options.filter(o => o.is_correct).map(o => (
+                      <p key={o.id} className="text-green-800 font-bold mt-1">{o.text}</p>
+                    ))}
+                  </div>
+                )}
+                {!correct && question.type === 'true_false' && (
+                  <div className="mt-4 bg-green-50 border border-green-200 rounded-xl p-4">
+                    <p className="text-sm text-green-700 font-medium">La respuesta correcta era:</p>
+                    <p className="text-green-800 font-bold mt-1">✅ Verdadero</p>
+                  </div>
+                )}
+                <p className="text-slate-500 text-sm mt-4">Esperá la próxima pregunta.</p>
+              </div>
+            ) : (
+              <div>
+                <div className="text-6xl mb-4">✅</div>
+                <h2 className="text-2xl font-bold text-green-700">¡Respuesta enviada!</h2>
+                <p className="text-slate-500 mt-2 text-sm">Esperá a que el capacitador cierre la pregunta.</p>
+              </div>
+            )}
           </div>
         ) : (
           <div className="w-full max-w-sm">
