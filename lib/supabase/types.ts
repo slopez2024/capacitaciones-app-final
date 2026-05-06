@@ -8,6 +8,7 @@ export interface Event {
   created_by: string
   is_active: boolean
   max_attendees: number
+  code: number | null
   created_at: string
   updated_at: string
 }

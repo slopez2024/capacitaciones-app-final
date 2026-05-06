@@ -1,4 +1,3 @@
-
 'use client'
 
 import { useState, useEffect, use } from 'react'
@@ -46,13 +45,20 @@ export default function ProjectorPage({ params }: { params: Promise<{ eventId: s
   const [view, setView] = useState<ProjectorView>('waiting')
   const [timeLeft, setTimeLeft] = useState<number | null>(null)
   const [ranking, setRanking] = useState<RankingItem[]>([])
-  const [showCorrect, setShowCorrect] = useState(false)
+  const [eventCode, setEventCode] = useState<number | null>(null)
 
   const eventUrl = getEventUrl(eventId)
 
-  // Cargar preguntas
   useEffect(() => {
     const supabase = createClient()
+
+    supabase
+      .from('events')
+      .select('code')
+      .eq('id', eventId)
+      .single()
+      .then(({ data }) => { if (data) setEventCode((data as { code: number }).code) })
+
     supabase
       .from('questions')
       .select('*, question_options(*)')
@@ -61,7 +67,6 @@ export default function ProjectorPage({ params }: { params: Promise<{ eventId: s
       .then(({ data }) => { if (data) setQuestions(data as Question[]) })
   }, [eventId])
 
-  // Realtime answers
   useEffect(() => {
     const supabase = createClient()
     const channel = supabase
@@ -73,7 +78,6 @@ export default function ProjectorPage({ params }: { params: Promise<{ eventId: s
     return () => { supabase.removeChannel(channel) }
   }, [eventId])
 
-  // Timer
   useEffect(() => {
     if (timeLeft === null || timeLeft <= 0) {
       if (timeLeft === 0) showResults()
@@ -87,25 +91,17 @@ export default function ProjectorPage({ params }: { params: Promise<{ eventId: s
   const currentAnswers = answers.filter(a => a.question_id === currentQuestion?.id)
   const allAnswered = attendees.length > 0 && currentAnswers.length >= attendees.length
 
-  // Auto cerrar cuando todos respondieron
   useEffect(() => {
-    if (allAnswered && view === 'question') {
-      showResults()
-    }
+    if (allAnswered && view === 'question') showResults()
   }, [allAnswered, view])
 
   const launchQuestion = async (index: number) => {
     const q = questions[index]
     if (!q) return
-
     const supabase = createClient()
-    // Cerrar preguntas anteriores
     await supabase.from('questions').update({ is_active: false, is_closed: true }).eq('event_id', eventId).neq('id', q.id)
-    // Activar esta
     await supabase.from('questions').update({ is_active: true, is_closed: false }).eq('id', q.id)
-
     setCurrentQuestionIndex(index)
-    setShowCorrect(false)
     setView('question')
     setTimeLeft(q.time_limit_seconds)
   }
@@ -115,7 +111,6 @@ export default function ProjectorPage({ params }: { params: Promise<{ eventId: s
     const supabase = createClient()
     await supabase.from('questions').update({ is_active: false, is_closed: true }).eq('id', currentQuestion.id)
     setTimeLeft(null)
-    setShowCorrect(true)
     setView('results')
   }
 
@@ -174,16 +169,23 @@ export default function ProjectorPage({ params }: { params: Promise<{ eventId: s
   const timePercent = currentQuestion ? ((timeLeft || 0) / currentQuestion.time_limit_seconds) * 100 : 0
   const timeColor = timeLeft !== null && timeLeft <= 10 ? '#ef4444' : timeLeft !== null && timeLeft <= 20 ? '#f59e0b' : '#10b981'
 
+  // Ordenar asistentes por legajo
+  const sortedAttendees = [...attendees].sort((a, b) => a.legajo.localeCompare(b.legajo, undefined, { numeric: true }))
+
   return (
     <div className="min-h-screen bg-[#0f0f1a] text-white flex flex-col overflow-hidden">
-
-      {/* Header */}
       <header className="flex items-center justify-between px-8 py-4 border-b border-white/10">
         <div className="flex items-center gap-3">
           <span className="text-2xl">🎓</span>
           <span className="font-bold text-lg text-gradient">CapacitApp</span>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4">
+          {eventCode && (
+            <div className="text-center">
+              <p className="text-xs text-white/40 uppercase tracking-widest">Código</p>
+              <p className="text-2xl font-bold text-white tracking-widest">{eventCode}</p>
+            </div>
+          )}
           <span className="text-sm text-white/50">{attendees.length} asistentes</span>
           {view === 'waiting' && (
             <button
@@ -195,46 +197,53 @@ export default function ProjectorPage({ params }: { params: Promise<{ eventId: s
             </button>
           )}
           {view === 'question' && (
-            <button
-              onClick={showResults}
-              className="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-xl text-sm font-medium"
-            >
+            <button onClick={showResults} className="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-xl text-sm font-medium">
               Cerrar pregunta
             </button>
           )}
           {view === 'results' && (
-            <button
-              onClick={nextQuestion}
-              className="gradient-primary px-6 py-2 rounded-xl font-semibold text-sm"
-            >
+            <button onClick={nextQuestion} className="gradient-primary px-6 py-2 rounded-xl font-semibold text-sm">
               {currentQuestionIndex + 1 >= questions.length ? '🏆 Ver podio' : 'Siguiente →'}
             </button>
           )}
         </div>
       </header>
 
-      {/* Main content */}
       <main className="flex-1 flex items-center justify-center p-8">
 
         {/* WAITING */}
         {view === 'waiting' && (
-          <div className="text-center">
-            <div className="mb-8">
-              <QRDisplay url={eventUrl} size={280} />
-            </div>
-            <h2 className="text-3xl font-bold mb-2">Escaneá para unirte</h2>
-            <p className="text-white/50 mb-6">{questions.length} preguntas preparadas</p>
-            <div className="flex flex-wrap gap-3 justify-center">
-              {attendees.slice(0, 20).map(a => (
-                <div key={a.id} className="glass px-3 py-1.5 rounded-full text-sm">
-                  {a.nombre} {a.apellido}
+          <div className="w-full max-w-6xl">
+            <div className="grid grid-cols-2 gap-12 items-center">
+              {/* QR y código */}
+              <div className="text-center">
+                <QRDisplay url={eventUrl} size={260} />
+                <div className="mt-6">
+                  <p className="text-white/50 text-sm mb-1">O ingresá el código en</p>
+                  <p className="text-white font-bold text-lg">capacitaciones-app-final.vercel.app</p>
+                  {eventCode && (
+                    <div className="mt-3 inline-block bg-white/10 rounded-2xl px-8 py-3">
+                      <p className="text-xs text-white/50 uppercase tracking-widest mb-1">Código</p>
+                      <p className="text-5xl font-black text-white tracking-widest">{eventCode}</p>
+                    </div>
+                  )}
                 </div>
-              ))}
-              {attendees.length > 20 && (
-                <div className="glass px-3 py-1.5 rounded-full text-sm text-white/50">
-                  +{attendees.length - 20} más
+              </div>
+
+              {/* Asistentes */}
+              <div>
+                <h3 className="text-white/50 text-sm uppercase tracking-widest mb-4">
+                  {attendees.length} asistentes registrados · {questions.length} preguntas
+                </h3>
+                <div className="grid grid-cols-2 gap-2 max-h-96 overflow-y-auto pr-2">
+                  {sortedAttendees.map(a => (
+                    <div key={a.id} className="glass rounded-xl px-3 py-2 flex items-center gap-2">
+                      <span className="text-indigo-300 text-xs font-mono font-bold shrink-0">{a.legajo}</span>
+                      <span className="text-white text-sm truncate">{a.nombre} {a.apellido}</span>
+                    </div>
+                  ))}
                 </div>
-              )}
+              </div>
             </div>
           </div>
         )}
@@ -242,7 +251,6 @@ export default function ProjectorPage({ params }: { params: Promise<{ eventId: s
         {/* QUESTION */}
         {view === 'question' && currentQuestion && (
           <div className="w-full max-w-5xl">
-            {/* Progress */}
             <div className="flex items-center justify-between mb-6">
               <span className="text-white/50 text-sm">
                 Pregunta {currentQuestionIndex + 1} de {questions.length}
@@ -252,7 +260,6 @@ export default function ProjectorPage({ params }: { params: Promise<{ eventId: s
               </span>
             </div>
 
-            {/* Timer */}
             <div className="mb-8">
               <div className="flex justify-between mb-2">
                 <span className="text-sm text-white/50">Tiempo restante</span>
@@ -266,22 +273,16 @@ export default function ProjectorPage({ params }: { params: Promise<{ eventId: s
               </div>
             </div>
 
-            {/* Question */}
             {currentQuestion.image_url && (
               <img src={currentQuestion.image_url} alt="" className="w-full max-h-48 object-cover rounded-2xl mb-6" />
             )}
             <h2 className="text-4xl font-bold text-center mb-8 leading-tight">{currentQuestion.text}</h2>
 
-            {/* Options */}
-            <div className={`grid gap-4 ${currentQuestion.type === 'true_false' ? 'grid-cols-2' : 'grid-cols-2'}`}>
+            <div className="grid grid-cols-2 gap-4">
               {currentQuestion.type === 'true_false' ? (
                 <>
-                  <div className="glass rounded-2xl p-6 text-center text-2xl font-bold text-green-400 border border-green-500/30">
-                    ✅ Verdadero
-                  </div>
-                  <div className="glass rounded-2xl p-6 text-center text-2xl font-bold text-red-400 border border-red-500/30">
-                    ❌ Falso
-                  </div>
+                  <div className="glass rounded-2xl p-6 text-center text-2xl font-bold text-green-400 border border-green-500/30">✅ Verdadero</div>
+                  <div className="glass rounded-2xl p-6 text-center text-2xl font-bold text-red-400 border border-red-500/30">❌ Falso</div>
                 </>
               ) : (
                 currentQuestion.question_options
@@ -320,16 +321,13 @@ export default function ProjectorPage({ params }: { params: Promise<{ eventId: s
                       <div key={item.key} className={`glass rounded-2xl p-5 border ${item.correct ? 'border-green-500/50' : 'border-white/10'}`}>
                         <div className="flex justify-between mb-3">
                           <span className="font-semibold text-lg flex items-center gap-2">
-                            {item.correct && <span className="text-green-400 text-sm">✓ Correcta</span>}
+                            {item.correct && <span className="text-green-400 text-sm bg-green-500/20 px-2 py-0.5 rounded-full">✓ Correcta</span>}
                             {item.label}
                           </span>
-                          <span className="text-white/70">{count} ({pct}%)</span>
+                          <span className="text-white/70 text-xl font-bold">{count} ({pct}%)</span>
                         </div>
-                        <div className="h-4 bg-white/10 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full transition-all duration-700 ${item.correct ? 'bg-green-500' : 'bg-white/30'}`}
-                            style={{ width: `${pct}%` }}
-                          />
+                        <div className="h-6 bg-white/10 rounded-full overflow-hidden">
+                          <div className={`h-full rounded-full transition-all duration-700 ${item.correct ? 'bg-green-500' : 'bg-white/30'}`} style={{ width: `${pct}%` }} />
                         </div>
                       </div>
                     )
@@ -345,16 +343,13 @@ export default function ProjectorPage({ params }: { params: Promise<{ eventId: s
                       <div key={opt.id} className={`glass rounded-2xl p-5 border ${opt.is_correct ? 'border-green-500/50' : 'border-white/10'}`}>
                         <div className="flex justify-between mb-3">
                           <span className="font-semibold text-lg flex items-center gap-2">
-                            {opt.is_correct && <span className="text-green-400 text-sm">✓ Correcta</span>}
+                            {opt.is_correct && <span className="text-green-400 text-sm bg-green-500/20 px-2 py-0.5 rounded-full">✓ Correcta</span>}
                             {opt.text}
                           </span>
-                          <span className="text-white/70">{count} ({pct}%)</span>
+                          <span className="text-white/70 text-xl font-bold">{count} ({pct}%)</span>
                         </div>
-                        <div className="h-4 bg-white/10 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full transition-all duration-700 ${opt.is_correct ? 'bg-green-500' : 'bg-indigo-500'}`}
-                            style={{ width: `${pct}%` }}
-                          />
+                        <div className="h-6 bg-white/10 rounded-full overflow-hidden">
+                          <div className={`h-full rounded-full transition-all duration-700 ${opt.is_correct ? 'bg-green-500' : 'bg-indigo-500'}`} style={{ width: `${pct}%` }} />
                         </div>
                       </div>
                     )
@@ -375,21 +370,18 @@ export default function ProjectorPage({ params }: { params: Promise<{ eventId: s
             ) : (
               <div className="space-y-4">
                 {ranking.map((item, i) => (
-                  <div
-                    key={i}
-                    className={`glass rounded-2xl p-5 flex items-center gap-4 border ${
-                      i === 0 ? 'border-yellow-500/50 bg-yellow-500/10' :
-                      i === 1 ? 'border-slate-400/50 bg-slate-400/10' :
-                      i === 2 ? 'border-orange-500/50 bg-orange-500/10' :
-                      'border-white/10'
-                    }`}
-                  >
+                  <div key={i} className={`glass rounded-2xl p-5 flex items-center gap-4 border ${
+                    i === 0 ? 'border-yellow-500/50 bg-yellow-500/10' :
+                    i === 1 ? 'border-slate-400/50 bg-slate-400/10' :
+                    i === 2 ? 'border-orange-500/50 bg-orange-500/10' :
+                    'border-white/10'
+                  }`}>
                     <span className="text-4xl w-12 text-center">
                       {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`}
                     </span>
                     <div className="flex-1 text-left">
                       <p className="text-xl font-bold">{item.apellido}, {item.nombre}</p>
-                      <p className="text-white/50 text-sm">Legajo: {item.legajo} · {item.correct} respuestas correctas</p>
+                      <p className="text-white/50 text-sm">Legajo: {item.legajo} · {item.correct} correctas</p>
                     </div>
                     <div className="text-right">
                       <p className="text-3xl font-bold text-gradient">{item.points}</p>
