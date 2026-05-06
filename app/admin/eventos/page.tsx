@@ -35,40 +35,33 @@ export default function EventPage({ params }: { params: Promise<{ eventId: strin
     const supabase = createClient()
     supabase.auth.getUser().then(({ data }) => {
       if (!data.user) { router.push('/admin'); return }
-
       supabase
         .from('events')
         .select('*')
         .eq('id', eventId)
-        .single()
-        .then(({ data: ev }) => {
-          if (!ev) { router.push('/admin/dashboard'); return }
-          setEvent(ev)
+        .limit(1)
+        .then(({ data: evs }) => {
+          if (!evs || evs.length === 0) { router.push('/admin/dashboard'); return }
+          setEvent(evs[0] as unknown as Event)
           setLoading(false)
         })
     })
   }, [eventId])
 
   const handleReset = async () => {
-    if (!confirm('¿Resetear el evento? Se eliminarán asistentes, preguntas y respuestas.')) return
-
+    if (!confirm('¿Resetear el evento?')) return
     const supabase = createClient()
+    const { data: qs } = await supabase.from('questions').select('id').eq('event_id', eventId)
+    const qIds = (qs || []).map((q: { id: string }) => q.id)
+    if (qIds.length > 0) await supabase.from('question_options').delete().in('question_id', qIds)
     await supabase.from('answers').delete().eq('event_id', eventId)
     await supabase.from('winners').delete().eq('event_id', eventId)
-    await supabase.from('question_options').delete().in(
-      'question_id',
-      (await supabase.from('questions').select('id').eq('event_id', eventId)).data?.map(q => q.id) ?? []
-    )
     await supabase.from('questions').delete().eq('event_id', eventId)
     await supabase.from('attendees').delete().eq('event_id', eventId)
-
     alert('Evento reseteado correctamente.')
   }
 
-  if (loading) {
-    return <div className="min-h-screen flex items-center justify-center"><Spinner size="lg" /></div>
-  }
-
+  if (loading) return <div className="min-h-screen flex items-center justify-center"><Spinner size="lg" /></div>
   if (!event) return null
 
   const tabs: { id: Tab; label: string; emoji: string }[] = [
@@ -80,36 +73,24 @@ export default function EventPage({ params }: { params: Promise<{ eventId: strin
 
   return (
     <div className="min-h-screen bg-slate-50">
-      {/* Header */}
       <header className="bg-white border-b border-slate-200 px-4 py-3 sticky top-0 z-10">
         <div className="max-w-5xl mx-auto flex items-center gap-4">
-          <button
-            onClick={() => router.push('/admin/dashboard')}
-            className="text-slate-400 hover:text-slate-600"
-          >
+          <button onClick={() => router.push('/admin/dashboard')} className="text-slate-400 hover:text-slate-600">
             ← Volver
           </button>
           <div className="flex-1 min-w-0">
             <h1 className="font-bold text-slate-800 truncate">{event.title}</h1>
             <p className="text-xs text-slate-400">{attendees.length}/100 asistentes</p>
           </div>
-          
-            href={getProjectorUrl(eventId)}
-            target="_blank"
-            className="text-xs bg-purple-100 text-purple-700 px-3 py-1.5 rounded-lg font-medium hover:bg-purple-200 transition-colors"
-          >
+          <a href={getProjectorUrl(eventId)} target="_blank" className="text-xs bg-purple-100 text-purple-700 px-3 py-1.5 rounded-lg font-medium hover:bg-purple-200 transition-colors">
             🖥️ Proyector
           </a>
-          <button
-            onClick={handleReset}
-            className="text-xs bg-red-100 text-red-600 px-3 py-1.5 rounded-lg font-medium hover:bg-red-200 transition-colors"
-          >
+          <button onClick={handleReset} className="text-xs bg-red-100 text-red-600 px-3 py-1.5 rounded-lg font-medium hover:bg-red-200 transition-colors">
             🔄 Resetear
           </button>
         </div>
       </header>
 
-      {/* Tabs */}
       <div className="bg-white border-b border-slate-200">
         <div className="max-w-5xl mx-auto px-4 flex gap-1 overflow-x-auto">
           {tabs.map(t => (
@@ -117,9 +98,7 @@ export default function EventPage({ params }: { params: Promise<{ eventId: strin
               key={t.id}
               onClick={() => setTab(t.id)}
               className={`px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-                tab === t.id
-                  ? 'border-indigo-600 text-indigo-600'
-                  : 'border-transparent text-slate-500 hover:text-slate-700'
+                tab === t.id ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'
               }`}
             >
               {t.emoji} {t.label}
@@ -128,7 +107,6 @@ export default function EventPage({ params }: { params: Promise<{ eventId: strin
         </div>
       </div>
 
-      {/* Content */}
       <main className="max-w-5xl mx-auto px-4 py-6">
         {tab === 'qr' && (
           <div className="flex flex-col items-center gap-6">
@@ -140,32 +118,23 @@ export default function EventPage({ params }: { params: Promise<{ eventId: strin
             <ExportButtons eventId={eventId} attendees={attendees} />
           </div>
         )}
-
-        {tab === 'asistentes' && (
-          <AttendeeList attendees={attendees} />
-        )}
-
+        {tab === 'asistentes' && <AttendeeList attendees={attendees} />}
         {tab === 'preguntas' && (
           <div className="space-y-6">
             <QuestionPanel eventId={eventId} />
-            {question && (
-              <LiveResults question={question} answers={answers} attendees={attendees} />
-            )}
+            {question && <LiveResults question={question} answers={answers} attendees={attendees} />}
           </div>
         )}
-
         {tab === 'sorteo' && (
           <div className="space-y-6">
             <div className="bg-white rounded-xl border border-slate-200 p-6 text-center">
               <p className="text-slate-600 mb-4">
-                {attendees.length === 0
-                  ? 'No hay asistentes registrados aún.'
-                  : `${attendees.length} asistente${attendees.length !== 1 ? 's' : ''} disponibles para el sorteo.`}
+                {attendees.length === 0 ? 'No hay asistentes registrados aún.' : `${attendees.length} asistente${attendees.length !== 1 ? 's' : ''} disponibles.`}
               </p>
               <button
                 onClick={() => setShowRuleta(true)}
                 disabled={attendees.length === 0}
-                className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold px-8 py-3 rounded-xl text-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-lg"
+                className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold px-8 py-3 rounded-xl text-lg disabled:opacity-40 disabled:cursor-not-allowed shadow-lg"
               >
                 🎲 Lanzar sorteo
               </button>
@@ -175,13 +144,7 @@ export default function EventPage({ params }: { params: Promise<{ eventId: strin
         )}
       </main>
 
-      {showRuleta && (
-        <RuletaModal
-          eventId={eventId}
-          attendees={attendees}
-          onClose={() => setShowRuleta(false)}
-        />
-      )}
+      {showRuleta && <RuletaModal eventId={eventId} attendees={attendees} onClose={() => setShowRuleta(false)} />}
     </div>
   )
 }

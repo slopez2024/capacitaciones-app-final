@@ -1,59 +1,57 @@
-'use client';
+'use client'
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
-import ErrorMessage from '@/components/ui/ErrorMessage';
-import Spinner from '@/components/ui/Spinner';
+export const dynamic = 'force-dynamic'
+
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
+import ErrorMessage from '@/components/ui/ErrorMessage'
+import Spinner from '@/components/ui/Spinner'
 
 export default function AdminLoginPage() {
-  const router = useRouter();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const router = useRouter()
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
   const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
+    e.preventDefault()
+    setError('')
+    setLoading(true)
 
-    const supabase = createClient();
-    const { error: authError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    const supabase = createClient()
+    const { error: authError } = await supabase.auth.signInWithPassword({ email, password })
 
     if (authError) {
-      setError('Email o contraseña incorrectos.');
-      setLoading(false);
-      return;
+      setError('Email o contraseña incorrectos.')
+      setLoading(false)
+      return
     }
 
-    router.push('/admin/dashboard');
-  };
+    router.push('/admin/dashboard')
+  }
 
   const handleRegister = async () => {
     if (!email || !password) {
-      setError('Completá email y contraseña para registrarte.');
-      return;
+      setError('Completá email y contraseña para registrarte.')
+      return
     }
-    setError('');
-    setLoading(true);
+    setError('')
+    setLoading(true)
 
-    const supabase = createClient();
-    const { error: regError } = await supabase.auth.signUp({ email, password });
+    const supabase = createClient()
+    const { error: regError } = await supabase.auth.signUp({ email, password })
 
     if (regError) {
-      setError(regError.message);
-      setLoading(false);
-      return;
+      setError(regError.message)
+      setLoading(false)
+      return
     }
 
-    setError('');
-    alert('Cuenta creada. Revisá tu email para confirmar.');
-    setLoading(false);
-  };
+    alert('Cuenta creada. Revisá tu email para confirmar.')
+    setLoading(false)
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-900 via-indigo-800 to-purple-900">
@@ -67,19 +65,15 @@ export default function AdminLoginPage() {
         </div>
 
         <div className="bg-white rounded-2xl shadow-2xl p-8">
-          <h2 className="text-xl font-semibold text-slate-800 mb-6">
-            Iniciar sesión
-          </h2>
+          <h2 className="text-xl font-semibold text-slate-800 mb-6">Iniciar sesión</h2>
 
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Email
-              </label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
               <input
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={e => setEmail(e.target.value)}
                 className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 placeholder="tu@email.com"
                 required
@@ -87,13 +81,11 @@ export default function AdminLoginPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Contraseña
-              </label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Contraseña</label>
               <input
                 type="password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={e => setPassword(e.target.value)}
                 className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 placeholder="••••••••"
                 required
@@ -123,5 +115,5 @@ export default function AdminLoginPage() {
         </div>
       </div>
     </div>
-  );
+  )
 }
