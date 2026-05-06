@@ -1,8 +1,8 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 
 @layer base {
   :root {
@@ -24,8 +24,8 @@
   body {
     @apply antialiased;
     font-family: 'Inter', system-ui, sans-serif;
-    background-color: var(--bg);
-    color: var(--text);
+    background-color: #f8fafc;
+    color: #0f172a;
   }
 }
 
@@ -60,18 +60,6 @@
     -webkit-text-fill-color: transparent;
     background-clip: text;
   }
-
-  .animate-float {
-    animation: float 3s ease-in-out infinite;
-  }
-
-  .animate-pulse-slow {
-    animation: pulse 3s ease-in-out infinite;
-  }
-
-  .card-admin {
-    @apply bg-white rounded-2xl border border-slate-100 shadow-sm;
-  }
 }
 
 @keyframes float {
@@ -82,8 +70,4 @@
 @keyframes countdown {
   from { stroke-dashoffset: 0; }
   to { stroke-dashoffset: 283; }
-}
-
-.countdown-ring {
-  animation: countdown linear forwards;
 }
