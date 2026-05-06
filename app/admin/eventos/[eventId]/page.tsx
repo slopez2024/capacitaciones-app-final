@@ -49,16 +49,32 @@ export default function EventPage({ params }: { params: Promise<{ eventId: strin
   }, [eventId])
 
   const handleReset = async () => {
-    if (!confirm('¿Resetear el evento?')) return
+    if (!confirm('¿Resetear el evento? Se eliminarán TODOS los datos: asistentes, preguntas, respuestas y ganadores.')) return
+
     const supabase = createClient()
+
+    // 1. Obtener IDs de preguntas
     const { data: qs } = await supabase.from('questions').select('id').eq('event_id', eventId)
     const qIds = (qs || []).map((q: { id: string }) => q.id)
-    if (qIds.length > 0) await supabase.from('question_options').delete().in('question_id', qIds)
+
+    // 2. Borrar opciones de preguntas
+    if (qIds.length > 0) {
+      await supabase.from('question_options').delete().in('question_id', qIds)
+    }
+
+    // 3. Borrar respuestas
     await supabase.from('answers').delete().eq('event_id', eventId)
+
+    // 4. Borrar ganadores
     await supabase.from('winners').delete().eq('event_id', eventId)
+
+    // 5. Borrar preguntas
     await supabase.from('questions').delete().eq('event_id', eventId)
+
+    // 6. Borrar asistentes
     await supabase.from('attendees').delete().eq('event_id', eventId)
-    alert('Evento reseteado correctamente.')
+
+    alert('Evento reseteado correctamente. Todos los datos fueron eliminados.')
   }
 
   if (loading) return <div className="min-h-screen flex items-center justify-center"><Spinner size="lg" /></div>
