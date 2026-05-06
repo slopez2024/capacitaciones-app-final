@@ -16,6 +16,7 @@ export default function CreateQuestionForm({ eventId, orderNum, onCreated, onCan
   const [type, setType] = useState<QuestionType>('multiple_choice')
   const [imageUrl, setImageUrl] = useState('')
   const [timeLimit, setTimeLimit] = useState(30)
+  const [correctAnswer, setCorrectAnswer] = useState<'true' | 'false'>('true')
   const [options, setOptions] = useState([
     { text: '', is_correct: false },
     { text: '', is_correct: false },
@@ -49,7 +50,18 @@ export default function CreateQuestionForm({ eventId, orderNum, onCreated, onCan
       return
     }
 
-    if (type === 'multiple_choice') {
+    if (type === 'true_false') {
+      // Guardar opciones verdadero/falso con la correcta marcada
+      const { error: optErr } = await supabase.from('question_options').insert([
+        { question_id: question.id, text: 'Verdadero', is_correct: correctAnswer === 'true', order_num: 0 },
+        { question_id: question.id, text: 'Falso', is_correct: correctAnswer === 'false', order_num: 1 },
+      ])
+      if (optErr) {
+        setError(optErr.message)
+        setLoading(false)
+        return
+      }
+    } else {
       const validOptions = options.filter(o => o.text.trim())
       if (validOptions.length < 2) {
         setError('Añadí al menos 2 opciones.')
@@ -107,6 +119,38 @@ export default function CreateQuestionForm({ eventId, orderNum, onCreated, onCan
             required
           />
         </div>
+
+        {type === 'true_false' && (
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">
+              ¿Cuál es la respuesta correcta?
+            </label>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setCorrectAnswer('true')}
+                className={`flex-1 py-2.5 rounded-xl font-semibold text-sm border-2 transition-all ${
+                  correctAnswer === 'true'
+                    ? 'bg-green-600 text-white border-green-600'
+                    : 'bg-white text-green-700 border-green-300'
+                }`}
+              >
+                ✅ Verdadero
+              </button>
+              <button
+                type="button"
+                onClick={() => setCorrectAnswer('false')}
+                className={`flex-1 py-2.5 rounded-xl font-semibold text-sm border-2 transition-all ${
+                  correctAnswer === 'false'
+                    ? 'bg-red-500 text-white border-red-500'
+                    : 'bg-white text-red-600 border-red-300'
+                }`}
+              >
+                ❌ Falso
+              </button>
+            </div>
+          </div>
+        )}
 
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">
