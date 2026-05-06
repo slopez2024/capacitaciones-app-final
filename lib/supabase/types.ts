@@ -31,6 +31,7 @@ export interface Question {
   is_active: boolean
   is_closed: boolean
   order_num: number
+  time_limit_seconds: number
   created_at: string
   question_options?: QuestionOption[]
 }
