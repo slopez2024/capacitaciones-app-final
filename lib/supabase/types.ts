@@ -51,6 +51,7 @@ export interface Answer {
   event_id: string
   option_id: string | null
   answer_text: string | null
+  response_time_ms: number | null
   created_at: string
 }
 
