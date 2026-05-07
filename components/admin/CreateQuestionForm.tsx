@@ -99,7 +99,7 @@ export default function CreateQuestionForm({eventId,orderNum,onCreated,onCancel}
           <label className="block text-sm font-medium text-slate-700 mb-2">Imagen (opcional)</label>
           <div className="border-2 border-dashed border-slate-200 rounded-xl p-4 text-center cursor-pointer hover:border-indigo-300 transition-colors" onClick={()=>document.getElementById("img-upload")?.click()}>
             {imagePreview?(
-              <img src={imagePreview} alt="preview" className="mx-auto max-h-48 rounded-lg object-cover"/>
+              <img src={imagePreview} alt="preview" className="mx-auto max-h-64 w-full rounded-lg object-cover"/>
             ):(
               <div>
                 <p className="text-3xl mb-2">📷</p>
