@@ -274,7 +274,7 @@ export default function ProjectorPage({ params }: { params: Promise<{ eventId: s
             </div>
 
             {currentQuestion.image_url && (
-              <img src={currentQuestion.image_url} alt="" className="w-full max-h-48 object-cover rounded-2xl mb-6" />
+              <img src={currentQuestion.image_url} alt="" className="w-full max-h-96 object-contain rounded-2xl mb-6" />
             )}
             <h2 className="text-4xl font-bold text-center mb-8 leading-tight">{currentQuestion.text}</h2>
 
