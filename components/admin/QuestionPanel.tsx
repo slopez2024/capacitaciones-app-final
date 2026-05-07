@@ -4,14 +4,17 @@ import {createClient} from "@/lib/supabase/client"
 import type {Question,QuestionOption} from "@/lib/supabase/types"
 import CreateQuestionForm from "./CreateQuestionForm"
 interface QWO extends Question {question_options:QuestionOption[]}
+interface EditOpt {id?:string;text:string;is_correct:boolean}
 export default function QuestionPanel({eventId}:{eventId:string}){
   const [questions,setQuestions]=useState<QWO[]>([])
   const [showForm,setShowForm]=useState(false)
   const [editQ,setEditQ]=useState<QWO|null>(null)
   const [editText,setEditText]=useState("")
   const [editTime,setEditTime]=useState(2)
+  const [editImageUrl,setEditImageUrl]=useState("")
   const [editCorrect,setEditCorrect]=useState<"true"|"false">("true")
-  const [editOptions,setEditOptions]=useState<{id?:string;text:string;is_correct:boolean}[]>([])
+  const [editOptions,setEditOptions]=useState<EditOpt[]>([])
+  const [saving,setSaving]=useState(false)
   const fetch2=async()=>{
     const s=createClient()
     const {data}=await s.from("questions").select("*,question_options(*)").eq("event_id",eventId).order("order_num",{ascending:true})
@@ -22,6 +25,7 @@ export default function QuestionPanel({eventId}:{eventId:string}){
     setEditQ(q)
     setEditText(q.text)
     setEditTime(Math.round(q.time_limit_seconds/60)||2)
+    setEditImageUrl(q.image_url||"" )
     if(q.type==="true_false"){
       const correct=q.question_options.find(o=>o.is_correct)
       setEditCorrect(correct?.text==="Verdadero"?"true":"false")
@@ -31,19 +35,20 @@ export default function QuestionPanel({eventId}:{eventId:string}){
   }
   const saveEdit=async()=>{
     if(!editQ)return
+    setSaving(true)
     const s=createClient()
-    await s.from("questions").update({text:editText.trim(),time_limit_seconds:editTime*60}).eq("id",editQ.id)
+    await s.from("questions").update({text:editText.trim(),time_limit_seconds:editTime*60,image_url:editImageUrl.trim()||null}).eq("id",editQ.id)
     if(editQ.type==="true_false"){
       const verd=editQ.question_options.find(o=>o.text==="Verdadero")
       const fals=editQ.question_options.find(o=>o.text==="Falso")
       if(verd)await s.from("question_options").update({is_correct:editCorrect==="true"}).eq("id",verd.id)
       if(fals)await s.from("question_options").update({is_correct:editCorrect==="false"}).eq("id",fals.id)
     }else{
-      for(const opt of editOptions){
-        if(opt.id){await s.from("question_options").update({text:opt.text,is_correct:opt.is_correct}).eq("id",opt.id)}
-        else{await s.from("question_options").insert({question_id:editQ.id,text:opt.text,is_correct:opt.is_correct,order_num:editOptions.indexOf(opt)})}
-      }
+      await s.from("question_options").delete().eq("question_id",editQ.id)
+      const valid=editOptions.filter(o=>o.text.trim())
+      await s.from("question_options").insert(valid.map((o,i)=>({question_id:editQ.id,text:o.text.trim(),is_correct:o.is_correct,order_num:i})))
     }
+    setSaving(false)
     setEditQ(null)
     fetch2()
   }
@@ -55,6 +60,7 @@ export default function QuestionPanel({eventId}:{eventId:string}){
     await s.from("questions").delete().eq("id",id)
     fetch2()
   }
+  const fmt=(m:number)=>m===1?"1 minuto":m+" minutos"
   return(
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -72,6 +78,7 @@ export default function QuestionPanel({eventId}:{eventId:string}){
                 <div className="flex-1">
                   <p className="font-medium text-slate-800 text-sm">{q.text}</p>
                   <p className="text-xs text-slate-400 mt-1">⏱ {Math.floor(q.time_limit_seconds/60)} min · {q.is_active?"ACTIVA":q.is_closed?"Cerrada":"Pendiente"}</p>
+                  {q.image_url&&<p className="text-xs text-indigo-500 mt-1">📷 Tiene imagen</p>}
                   <ul className="mt-2 space-y-1">{q.question_options.sort((a,b)=>a.order_num-b.order_num).map(opt=><li key={opt.id} className="text-xs text-slate-500">{opt.is_correct?"✅":"○"} {opt.text}</li>)}</ul>
                 </div>
                 <div className="flex flex-col gap-1 shrink-0">
@@ -86,23 +93,19 @@ export default function QuestionPanel({eventId}:{eventId:string}){
       )}
       {editQ&&(
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl max-h-screen overflow-y-auto">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl overflow-y-auto max-h-[90vh]">
             <h3 className="font-bold text-slate-800 text-lg mb-4">Editar pregunta</h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Pregunta</label>
-                <textarea value={editText} onChange={e=>setEditText(e.target.value)} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm resize-none" rows={3}/>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Tiempo: {editTime} min</label>
-                <input type="range" min={1} max={10} step={1} value={editTime} onChange={e=>setEditTime(Number(e.target.value))} className="w-full accent-indigo-600"/>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Pregunta *</label>
+                <textarea value={editText} onChange={e=>setEditText(e.target.value)} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500" rows={3}/>
               </div>
               {editQ.type==="true_false"&&(
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">Respuesta correcta</label>
                   <div className="flex gap-3">
-                    <button type="button" onClick={()=>setEditCorrect("true")} className={"flex-1 py-2 rounded-xl font-semibold text-sm border-2 "+(editCorrect==="true"?"bg-green-600 text-white border-green-600":"bg-white text-green-700 border-green-300")}>Verdadero</button>
-                    <button type="button" onClick={()=>setEditCorrect("false")} className={"flex-1 py-2 rounded-xl font-semibold text-sm border-2 "+(editCorrect==="false"?"bg-red-500 text-white border-red-500":"bg-white text-red-600 border-red-300")}>Falso</button>
+                    <button type="button" onClick={()=>setEditCorrect("true")} className={"flex-1 py-2.5 rounded-xl font-semibold text-sm border-2 "+(editCorrect==="true"?"bg-green-600 text-white border-green-600":"bg-white text-green-700 border-green-300")}>✅ Verdadero</button>
+                    <button type="button" onClick={()=>setEditCorrect("false")} className={"flex-1 py-2.5 rounded-xl font-semibold text-sm border-2 "+(editCorrect==="false"?"bg-red-500 text-white border-red-500":"bg-white text-red-600 border-red-300")}>❌ Falso</button>
                   </div>
                 </div>
               )}
@@ -112,16 +115,27 @@ export default function QuestionPanel({eventId}:{eventId:string}){
                   {editOptions.map((opt,i)=>(
                     <div key={i} className="flex items-center gap-2">
                       <input type="checkbox" checked={opt.is_correct} onChange={e=>setEditOptions(prev=>prev.map((o,idx)=>idx===i?{...o,is_correct:e.target.checked}:o))}/>
-                      <input value={opt.text} onChange={e=>setEditOptions(prev=>prev.map((o,idx)=>idx===i?{...o,text:e.target.value}:o))} className="flex-1 border border-slate-200 rounded-lg px-3 py-1.5 text-sm"/>
+                      <input value={opt.text} onChange={e=>setEditOptions(prev=>prev.map((o,idx)=>idx===i?{...o,text:e.target.value}:o))} className="flex-1 border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder={"Opcion "+(i+1)}/>
+                      {editOptions.length>2&&<button type="button" onClick={()=>setEditOptions(prev=>prev.filter((_,idx)=>idx!==i))} className="text-slate-300 hover:text-red-500">×</button>}
                     </div>
                   ))}
-                  <button type="button" onClick={()=>setEditOptions(prev=>[...prev,{text:"",is_correct:false}])} className="text-sm text-indigo-600">+ Agregar opcion</button>
+                  <p className="text-xs text-slate-400">✓ Marca las opciones correctas</p>
+                  {editOptions.length<6&&<button type="button" onClick={()=>setEditOptions(prev=>[...prev,{text:"",is_correct:false}])} className="text-sm text-indigo-600">+ Agregar opcion</button>}
                 </div>
               )}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Tiempo: <span className="text-indigo-600 font-bold">{fmt(editTime)}</span></label>
+                <input type="range" min={1} max={10} step={1} value={editTime} onChange={e=>setEditTime(Number(e.target.value))} className="w-full accent-indigo-600"/>
+                <div className="flex justify-between text-xs text-slate-400 mt-1"><span>1 min</span><span>5 min</span><span>10 min</span></div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">URL imagen (opcional)</label>
+                <input value={editImageUrl} onChange={e=>setEditImageUrl(e.target.value)} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="https://..." type="url"/>
+              </div>
             </div>
-            <div className="flex gap-3 mt-4">
-              <button onClick={saveEdit} className="flex-1 bg-indigo-600 text-white font-semibold py-2 rounded-lg text-sm">Guardar</button>
-              <button onClick={()=>setEditQ(null)} className="flex-1 bg-slate-100 text-slate-700 font-semibold py-2 rounded-lg text-sm">Cancelar</button>
+            <div className="flex gap-3 mt-6">
+              <button onClick={saveEdit} disabled={saving} className="flex-1 bg-indigo-600 text-white font-semibold py-2.5 rounded-lg text-sm disabled:opacity-50">{saving?"Guardando...":"Guardar cambios"}</button>
+              <button onClick={()=>setEditQ(null)} className="flex-1 bg-slate-100 text-slate-700 font-semibold py-2.5 rounded-lg text-sm">Cancelar</button>
             </div>
           </div>
         </div>
