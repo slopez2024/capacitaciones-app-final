@@ -27,7 +27,7 @@ export default function JuegoPage({params}:{params:Promise<{eventId:string}>}){
     setSelected(null);setError("")
     startTime.current=Date.now()
     if(timerRef.current)clearInterval(timerRef.current)
-    if(question&&!question.is_closed){
+    if(question&&!question.is_closed&&!question.is_active===false){
       setTimeLeft(question.time_limit_seconds||60)
       timerRef.current=setInterval(()=>{
         setTimeLeft(prev=>{
@@ -132,13 +132,13 @@ export default function JuegoPage({params}:{params:Promise<{eventId:string}>}){
           <div className="text-center px-4">
             <div className="text-6xl mb-4">✅</div>
             <h2 className="text-2xl font-bold text-green-700">Respuesta enviada!</h2>
-            {timeLeft!==null&&<p className={"text-6xl font-black mt-6 "+timeColor}>{timeLeft}s</p>}
+            {timeLeft!==null&&<p className={"text-4xl font-black mt-4 "+timeColor}>{timeLeft}s</p>}
           </div>
         ):(
           <div className="w-full max-w-sm">
             {timeLeft!==null&&(
               <div className="mb-4 text-center">
-                <p className={"text-7xl font-black mb-2 "+timeColor}>{timeLeft}s</p>
+                <p className={"text-5xl font-black mb-2 "+timeColor}>{timeLeft}s</p>
                 <div className="h-3 bg-slate-200 rounded-full overflow-hidden">
                   <div className={"h-full "+barColor+" rounded-full transition-all duration-1000"} style={{width:timePercent+"%"}}/>
                 </div>
