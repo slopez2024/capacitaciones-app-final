@@ -263,7 +263,7 @@ export default function ProjectorPage({ params }: { params: Promise<{ eventId: s
             <div className="mb-8">
               <div className="flex justify-between mb-2">
                 <span className="text-sm text-white/50">Tiempo restante</span>
-                <span className="font-bold text-xl" style={{ color: timeColor }}>{timeLeft}s</span>
+                <span className="font-black text-6xl" style={{ color: timeColor }}>{timeLeft}s</span>
               </div>
               <div className="h-3 bg-white/10 rounded-full overflow-hidden">
                 <div
