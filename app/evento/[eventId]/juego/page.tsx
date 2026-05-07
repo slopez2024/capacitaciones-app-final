@@ -81,7 +81,7 @@ export default function JuegoPage({params}:{params:Promise<{eventId:string}>}){
     setSending(true);setError("")
     const responseTimeMs=Date.now()-startTime.current
     const s=createClient()
-    const {error:err}=await (s as {from:(t:string)=>{insert:(d:object)=>Promise<{error:{code:string}|null}>}}).from("answers").insert({question_id:question.id,attendee_id:attendeeId,event_id:eventId,option_id:optionId||null,answer_text:answerText||null,response_time_ms:responseTimeMs})
+    const {error:err}=await (s as unknown as {from:(t:string)=>{insert:(d:object)=>Promise<{error:{code:string}|null}>}}).from("answers").insert({question_id:question.id,attendee_id:attendeeId,event_id:eventId,option_id:optionId||null,answer_text:answerText||null,response_time_ms:responseTimeMs})
     if(err){if(err.code==="23505")setAnswered(prev=>({...prev,[question.id]:{optionId,answerText}}));else setError("Error al enviar.")}
     else setAnswered(prev=>({...prev,[question.id]:{optionId,answerText}}))
     setSending(false)
