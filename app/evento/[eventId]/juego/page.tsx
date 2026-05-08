@@ -26,7 +26,7 @@ export default function JuegoPage({params}:{params:Promise<{eventId:string}>}){
 
   useEffect(()=>{
     window.clearInterval(timerRef.current)
-    if(!question){setTimeLeft(null);return}
+    if(!question||closedQuestion){setTimeLeft(0);return}
     setSelected(null);setError("")
     startTime.current=Date.now()
     setTimeLeft(question.time_limit_seconds||60)
