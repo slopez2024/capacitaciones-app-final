@@ -36,8 +36,7 @@ export default function JuegoPage({params}:{params:Promise<{eventId:string}>}){
         return prev-1
       })
     },1000)
-    return()=>{if(timerRef.current)clearInterval(timerRef.current)}
-    if(timerRef.current)clearInterval(timerRef.current);setTimeLeft(0)},[question?.id,closedQuestion?.id])
+    return()=>{if(timerRef.current)clearInterval(timerRef.current)}},[question?.id,closedQuestion?.id])
 
   useEffect(()=>{
     if(allDone)buildRanking()
