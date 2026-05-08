@@ -16,7 +16,7 @@ export default function JuegoPage({params}:{params:Promise<{eventId:string}>}){
   const [timeLeft,setTimeLeft]=useState<number|null>(null)
   const [ranking,setRanking]=useState<RankingItem[]>([])
   const startTime=useRef<number>(Date.now())
-  const timerRef=useRef<ReturnType<typeof setInterval>|null>(null)
+  const timerRef=useRef<number|undefined>(undefined)
 
   useEffect(()=>{
     const id=sessionStorage.getItem("attendee_"+eventId)
@@ -25,18 +25,18 @@ export default function JuegoPage({params}:{params:Promise<{eventId:string}>}){
   },[eventId])
 
   useEffect(()=>{
-    if(timerRef.current)clearInterval(timerRef.current)
+    window.clearInterval(timerRef.current)
     if(!question){setTimeLeft(null);return}
     setSelected(null);setError("")
     startTime.current=Date.now()
     setTimeLeft(question.time_limit_seconds||60)
-    timerRef.current=setInterval(()=>{
+    timerRef.current=window.setInterval(()=>{
       setTimeLeft(prev=>{
-        if(prev===null||prev<=1){clearInterval(timerRef.current!);return 0}
+        if(prev===null||prev<=1){window.clearInterval(timerRef.current);return 0}
         return prev-1
       })
     },1000)
-    return()=>{if(timerRef.current)clearInterval(timerRef.current)}},[question?.id,closedQuestion?.id])
+    return()=>{window.clearInterval(timerRef.current)}},[question?.id,closedQuestion?.id])
 
   useEffect(()=>{
     if(allDone)buildRanking()
