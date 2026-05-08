@@ -7,38 +7,26 @@ interface RankingItem{nombre:string;apellido:string;legajo:string;points:number;
 export default function JuegoPage({params}:{params:Promise<{eventId:string}>}){
   const {eventId}=use(params)
   const router=useRouter()
-  const {question,loading,closedQuestion,allDone}=useActiveQuestion(eventId)
+  const {question,closedQuestion,allDone,loading}=useActiveQuestion(eventId)
   const [attendeeId,setAttendeeId]=useState<string|null>(null)
   const [answered,setAnswered]=useState<{[id:string]:{optionId?:string;answerText?:string}}>({})
   const [sending,setSending]=useState(false)
   const [error,setError]=useState("")
   const [selected,setSelected]=useState<string|null>(null)
   const [timeLeft,setTimeLeft]=useState<number|null>(null)
-  const [allClosedLocal,setAllClosedLocal]=useState(false)
   const [ranking,setRanking]=useState<RankingItem[]>([])
   const startTime=useRef<number>(Date.now())
   const timerRef=useRef<ReturnType<typeof setInterval>|null>(null)
+
   useEffect(()=>{
     const id=sessionStorage.getItem("attendee_"+eventId)
     if(!id){router.push("/evento/"+eventId);return}
     setAttendeeId(id)
   },[eventId])
+
   useEffect(()=>{
     if(timerRef.current)clearInterval(timerRef.current)
-    if(!question){
-      setTimeLeft(null)
-      if(!loading&&attendeeId){
-        const s=createClient()
-        s.from("questions").select("id,is_closed").eq("event_id",eventId).then(({data})=>{
-          if(data&&data.length>0&&data.every((q:{is_closed:boolean})=>q.is_closed)){
-            setAllClosedLocal(true)
-            buildRanking()
-          }
-        })
-      }
-      return
-    }
-    if(question.is_closed){setTimeLeft(0);return}
+    if(!question){setTimeLeft(null);return}
     setSelected(null);setError("")
     startTime.current=Date.now()
     setTimeLeft(question.time_limit_seconds||60)
@@ -49,7 +37,12 @@ export default function JuegoPage({params}:{params:Promise<{eventId:string}>}){
       })
     },1000)
     return()=>{if(timerRef.current)clearInterval(timerRef.current)}
-  },[question?.id,question?.is_closed,loading,attendeeId])
+  },[question?.id])
+
+  useEffect(()=>{
+    if(allDone)buildRanking()
+  },[allDone])
+
   const buildRanking=async()=>{
     const s=createClient()
     const {data:allAnswers}=await s.from("answers").select("*,attendees(*),question_options(*)").eq("event_id",eventId)
@@ -69,15 +62,19 @@ export default function JuegoPage({params}:{params:Promise<{eventId:string}>}){
     }
     setRanking(Object.values(scores).sort((a,b)=>b.points-a.points).slice(0,5))
   }
+
   const displayQuestion=question||closedQuestion
   const myAnswer=displayQuestion?answered[displayQuestion.id]:null
   const alreadyAnswered=!!myAnswer
+  const questionIsClosed=!question&&!!closedQuestion
+
   const isCorrect=()=>{
     if(!displayQuestion||!myAnswer)return null
     if(displayQuestion.type==="true_false"){const co=displayQuestion.question_options?.find(o=>o.is_correct);return myAnswer.answerText===(co?.text==="Verdadero"?"true":"false")}
     const co=displayQuestion.question_options?.filter(o=>o.is_correct).map(o=>o.id)||[]
     return myAnswer.optionId?co.includes(myAnswer.optionId):false
   }
+
   const handleAnswer=async(optionId?:string,answerText?:string)=>{
     if(!attendeeId||!question||sending||alreadyAnswered||timeLeft===0)return
     setSending(true);setError("")
@@ -88,12 +85,14 @@ export default function JuegoPage({params}:{params:Promise<{eventId:string}>}){
     else setAnswered(prev=>({...prev,[question.id]:{optionId,answerText}}))
     setSending(false)
   }
+
   if(!attendeeId)return null
+
   const correct=isCorrect()
   const timePercent=question?((timeLeft||0)/(question.time_limit_seconds||60))*100:0
   const timeColor=timeLeft!==null&&timeLeft<=10?"text-red-600":timeLeft!==null&&timeLeft<=30?"text-yellow-500":"text-indigo-600"
   const barColor=timeLeft!==null&&timeLeft<=10?"bg-red-500":timeLeft!==null&&timeLeft<=30?"bg-yellow-500":"bg-green-500"
-  const isClosed=!question&&closedQuestion||question?.is_closed||timeLeft===0
+
   if(allDone){return(
     <div className="min-h-screen bg-[#0f0f1a] text-white flex flex-col">
       <header className="bg-indigo-700 px-4 py-3 text-center"><p className="text-sm font-medium">🎓 CapacitApp</p></header>
@@ -114,13 +113,14 @@ export default function JuegoPage({params}:{params:Promise<{eventId:string}>}){
       </main>
     </div>
   )}
+
   return(
     <div className="min-h-screen bg-slate-50 flex flex-col">
       <header className="bg-indigo-700 text-white px-4 py-3 text-center"><p className="text-sm font-medium">🎓 CapacitApp</p></header>
       <main className="flex-1 flex items-center justify-center p-4">
         {loading?<p className="text-slate-500">Cargando...</p>
         :!displayQuestion?<div className="text-center"><div className="text-5xl mb-4">⏳</div><h2 className="text-xl font-bold text-slate-700">Esperando pregunta</h2></div>
-        :isClosed?(
+        :questionIsClosed||timeLeft===0?(
           <div className="text-center px-4 w-full max-w-sm">
             {alreadyAnswered?(
               <div>
@@ -128,7 +128,13 @@ export default function JuegoPage({params}:{params:Promise<{eventId:string}>}){
                 <h2 className={"text-2xl font-bold mb-2 "+(correct?"text-green-600":"text-red-500")}>{correct?"Correcto!":"Incorrecto"}</h2>
                 {!correct&&<div className="mt-4 bg-green-50 border border-green-200 rounded-xl p-4"><p className="text-sm text-green-700">La respuesta correcta era:</p>{displayQuestion.question_options?.filter(o=>o.is_correct).map(o=><p key={o.id} className="text-green-800 font-bold mt-1">{o.text}</p>)}</div>}
               </div>
-            ):<div><div className="text-6xl mb-4">⏰</div><h2 className="text-2xl font-bold text-red-500">Tiempo!</h2><div className="mt-4 bg-green-50 border border-green-200 rounded-xl p-4"><p className="text-sm text-green-700">La respuesta correcta era:</p>{displayQuestion.question_options?.filter(o=>o.is_correct).map(o=><p key={o.id} className="text-green-800 font-bold mt-1">{o.text}</p>)}</div></div>}
+            ):(
+              <div>
+                <div className="text-6xl mb-4">⏰</div>
+                <h2 className="text-2xl font-bold text-red-500">Tiempo!</h2>
+                <div className="mt-4 bg-green-50 border border-green-200 rounded-xl p-4"><p className="text-sm text-green-700">La respuesta correcta era:</p>{displayQuestion.question_options?.filter(o=>o.is_correct).map(o=><p key={o.id} className="text-green-800 font-bold mt-1">{o.text}</p>)}</div>
+              </div>
+            )}
             <p className="text-slate-400 text-sm mt-6">Espera la proxima pregunta...</p>
           </div>
         ):alreadyAnswered?(
