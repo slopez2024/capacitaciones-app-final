@@ -14,7 +14,7 @@ export default function JuegoPage({params}:{params:Promise<{eventId:string}>}){
   const [error,setError]=useState("")
   const [selected,setSelected]=useState<string|null>(null)
   const [timeLeft,setTimeLeft]=useState<number|null>(null)
-  const [allDone,setAllClosed]=useState(false)
+  const [allClosedLocal,setAllClosedLocal]=useState(false)
   const [ranking,setRanking]=useState<RankingItem[]>([])
   const startTime=useRef<number>(Date.now())
   const timerRef=useRef<ReturnType<typeof setInterval>|null>(null)
@@ -31,7 +31,7 @@ export default function JuegoPage({params}:{params:Promise<{eventId:string}>}){
         const s=createClient()
         s.from("questions").select("id,is_closed").eq("event_id",eventId).then(({data})=>{
           if(data&&data.length>0&&data.every((q:{is_closed:boolean})=>q.is_closed)){
-            setAllClosed(true)
+            setAllClosedLocal(true)
             buildRanking()
           }
         })
