@@ -1,4 +1,4 @@
-a"use client"
+"use client"
 import {useEffect,useState,use,useRef} from "react"
 import {useRouter} from "next/navigation"
 import {createClient} from "@/lib/supabase/client"
