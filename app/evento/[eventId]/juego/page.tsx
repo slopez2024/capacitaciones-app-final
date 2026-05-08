@@ -7,14 +7,14 @@ interface RankingItem{nombre:string;apellido:string;legajo:string;points:number;
 export default function JuegoPage({params}:{params:Promise<{eventId:string}>}){
   const {eventId}=use(params)
   const router=useRouter()
-  const {question,loading,lastClosed}=useActiveQuestion(eventId)
+  const {question,loading,closedQuestion,allDone}=useActiveQuestion(eventId)
   const [attendeeId,setAttendeeId]=useState<string|null>(null)
   const [answered,setAnswered]=useState<{[id:string]:{optionId?:string;answerText?:string}}>({})
   const [sending,setSending]=useState(false)
   const [error,setError]=useState("")
   const [selected,setSelected]=useState<string|null>(null)
   const [timeLeft,setTimeLeft]=useState<number|null>(null)
-  const [allClosed,setAllClosed]=useState(false)
+  const [allDone,setAllClosed]=useState(false)
   const [ranking,setRanking]=useState<RankingItem[]>([])
   const startTime=useRef<number>(Date.now())
   const timerRef=useRef<ReturnType<typeof setInterval>|null>(null)
@@ -69,7 +69,7 @@ export default function JuegoPage({params}:{params:Promise<{eventId:string}>}){
     }
     setRanking(Object.values(scores).sort((a,b)=>b.points-a.points).slice(0,5))
   }
-  const displayQuestion=question||lastClosed
+  const displayQuestion=question||closedQuestion
   const myAnswer=displayQuestion?answered[displayQuestion.id]:null
   const alreadyAnswered=!!myAnswer
   const isCorrect=()=>{
@@ -93,8 +93,8 @@ export default function JuegoPage({params}:{params:Promise<{eventId:string}>}){
   const timePercent=question?((timeLeft||0)/(question.time_limit_seconds||60))*100:0
   const timeColor=timeLeft!==null&&timeLeft<=10?"text-red-600":timeLeft!==null&&timeLeft<=30?"text-yellow-500":"text-indigo-600"
   const barColor=timeLeft!==null&&timeLeft<=10?"bg-red-500":timeLeft!==null&&timeLeft<=30?"bg-yellow-500":"bg-green-500"
-  const isClosed=!question&&lastClosed||question?.is_closed||timeLeft===0
-  if(allClosed){return(
+  const isClosed=!question&&closedQuestion||question?.is_closed||timeLeft===0
+  if(allDone){return(
     <div className="min-h-screen bg-[#0f0f1a] text-white flex flex-col">
       <header className="bg-indigo-700 px-4 py-3 text-center"><p className="text-sm font-medium">🎓 CapacitApp</p></header>
       <main className="flex-1 flex flex-col items-center justify-center p-4">
