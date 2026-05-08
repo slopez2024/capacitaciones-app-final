@@ -43,4 +43,4 @@ export function useActiveQuestion(eventId:string){
     return()=>{supabase.removeChannel(channel)}
   },[eventId])
   return {question,closedQuestion,allDone,loading,refetch:fetchState}
-}x
+}
