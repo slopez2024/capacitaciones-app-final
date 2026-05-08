@@ -18,7 +18,7 @@ export default function JuegoPage({params}:{params:Promise<{eventId:string}>}){
   const [ranking,setRanking]=useState<RankingItem[]>([])
   const [lastQuestion,setLastQuestion]=useState<any>(null)
   const startTime=useRef<number>(Date.now())
-  const timerRef=useRef<number|undefined>(undefined)
+  const timerRef=useRef<ReturnType<typeof setInterval>|undefined>(undefined)
 
   useEffect(()=>{
     const id=sessionStorage.getItem("attendee_"+eventId)
