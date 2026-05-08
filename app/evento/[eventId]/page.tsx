@@ -1,74 +1,206 @@
 "use client"
-import {useState, use} from "react"
+import {useEffect,useState,use,useRef} from "react"
 import {useRouter} from "next/navigation"
 import {createClient} from "@/lib/supabase/client"
+import {useActiveQuestion} from "@/lib/hooks/useActiveQuestion"
+interface RankingItem{nombre:string;apellido:string;legajo:string;points:number;correct:number}
+export default function JuegoPage({params}:{params:Promise<{eventId:string}>}){
+  const {eventId}=use(params)
+  const router=useRouter()
+  const {question,loading}=useActiveQuestion(eventId)
+  const [attendeeId,setAttendeeId]=useState<string|null>(null)
+  const [answered,setAnswered]=useState<{[id:string]:{optionId?:string;answerText?:string}}>({})
+  const [sending,setSending]=useState(false)
+  const [error,setError]=useState("")
+  const [selected,setSelected]=useState<string|null>(null)
+  const [timeLeft,setTimeLeft]=useState<number|null>(null)
+  const [allClosed,setAllClosed]=useState(false)
+  const [ranking,setRanking]=useState<RankingItem[]>([])
+  const [lastQuestion,setLastQuestion]=useState<any>(null)
+  const startTime=useRef<number>(Date.now())
+  const timerRef=useRef<ReturnType<typeof setInterval>|undefined>(undefined)
 
-export default function EventoPage({params}: {params: Promise<{eventId: string}>}){
-  const {eventId} = use(params)
-  const router = useRouter()
-  const [legajo, setLegajo] = useState("")
-  const [dni, setDni] = useState("")
-  const [nombre, setNombre] = useState("")
-  const [apellido, setApellido] = useState("")
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState("")
+  useEffect(()=>{
+    const id=sessionStorage.getItem("attendee_"+eventId)
+    if(!id){router.push("/evento/"+eventId);return}
+    setAttendeeId(id)
+  },[eventId])
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  useEffect(()=>{
+    if(question){setLastQuestion(question)}
+  },[question?.id])
+
+  useEffect(()=>{
+    if(!attendeeId)return
+    const s=createClient()
+    const ch=s.channel("podium-watch:"+eventId)
+      .on("postgres_changes",{event:"UPDATE",schema:"public",table:"questions",filter:"event_id=eq."+eventId},()=>{
+        s.from("questions").select("id,is_closed,is_active").eq("event_id",eventId).then(({data})=>{
+          if(data&&data.length>0&&data.every((q:any)=>q.is_closed)&&data.every((q:any)=>!q.is_active)){
+            setAllClosed(true)
+            buildRanking()
+          }
+        })
+      })
+      .subscribe()
+    return()=>{s.removeChannel(ch)}
+  },[attendeeId,eventId])
+
+  useEffect(()=>{
+    if(timerRef.current)clearInterval(timerRef.current)
+    if(!question){setTimeLeft(null);return}
+    if(question.is_closed){setTimeLeft(0);return}
+    setSelected(null)
     setError("")
-    setLoading(true)
-    const supabase = createClient()
-    const {data: events} = await supabase.from("events").select("id,is_active,max_attendees").eq("id", eventId).limit(1)
-    const event = events && events.length > 0 ? events[0] as {id:string;is_active:boolean;max_attendees:number} : null
-    if(!event){setError("Evento no encontrado.");setLoading(false);return}
-    if(!event.is_active){setError("Este evento no esta activo.");setLoading(false);return}
-    const {error: insertError} = await supabase.from("attendees").insert({event_id:eventId,legajo:legajo.trim(),dni:dni.trim(),nombre:nombre.trim(),apellido:apellido.trim()})
-    if(insertError){
-      if(insertError.code==="23505"){
-        if(insertError.message.includes("dni"))setError("Este DNI ya esta registrado.")
-        else if(insertError.message.includes("legajo"))setError("Este legajo ya esta registrado.")
-        else setError("Ya estas registrado en este evento.")
-      }else setError("Error al registrarse: "+insertError.message)
-      setLoading(false);return
+    startTime.current=Date.now()
+    setTimeLeft(question.time_limit_seconds||60)
+    timerRef.current=setInterval(()=>{
+      setTimeLeft(prev=>{
+        if(prev===null||prev<=1){clearInterval(timerRef.current);return 0}
+        return prev-1
+      })
+    },1000)
+    return()=>{if(timerRef.current)clearInterval(timerRef.current)}
+  },[question?.id,question?.is_closed])
+
+  const buildRanking=async()=>{
+    const s=createClient()
+    const {data:allAnswers}=await s.from("answers").select("*,attendees(*),question_options(*)").eq("event_id",eventId)
+    const {data:allQuestions}=await s.from("questions").select("*,question_options(*)").eq("event_id",eventId)
+    if(!allAnswers||!allQuestions)return
+    const scores:{[id:string]:RankingItem}={}
+    for(const answer of allAnswers){
+      const att=(answer as any).attendees
+      if(!att)continue
+      if(!scores[att.id])scores[att.id]={nombre:att.nombre,apellido:att.apellido,legajo:att.legajo,points:0,correct:0}
+      const q=allQuestions.find((q:any)=>q.id===answer.question_id) as any
+      if(!q)continue
+      let correct=false
+      if(q.type==="true_false"){const co=q.question_options.find((o:any)=>o.is_correct);correct=answer.answer_text===(co?.text==="Verdadero"?"true":"false")}
+      else{const co=q.question_options.filter((o:any)=>o.is_correct).map((o:any)=>o.id);correct=answer.option_id?co.includes(answer.option_id):false}
+      if(correct){const t=(answer as any).response_time_ms||99999;scores[att.id].points+=Math.max(100,1000-Math.floor(t/100));scores[att.id].correct+=1}
     }
-    const {data: attData} = await supabase.from("attendees").select("id").eq("event_id",eventId).eq("dni",dni.trim()).limit(1)
-    if(attData&&attData.length>0){
-      sessionStorage.setItem("attendee_"+eventId,(attData[0] as {id:string}).id)
-    }
-    router.push("/evento/"+eventId+"/juego")
+    setRanking(Object.values(scores).sort((a,b)=>b.points-a.points).slice(0,5))
   }
 
+  const activeQ=question||lastQuestion
+  const myAnswer=activeQ?answered[activeQ.id]:null
+  const alreadyAnswered=!!myAnswer
+  const isCorrect=()=>{
+    if(!activeQ||!myAnswer)return null
+    if(activeQ.type==="true_false"){const co=activeQ.question_options?.find((o:any)=>o.is_correct);return myAnswer.answerText===(co?.text==="Verdadero"?"true":"false")}
+    const co=activeQ.question_options?.filter((o:any)=>o.is_correct).map((o:any)=>o.id)||[]
+    return myAnswer.optionId?co.includes(myAnswer.optionId):false
+  }
+
+  const handleAnswer=async(optionId?:string,answerText?:string)=>{
+    if(!attendeeId||!question||sending||alreadyAnswered||timeLeft===0)return
+    setSending(true);setError("")
+    const responseTimeMs=Date.now()-startTime.current
+    const s=createClient()
+    const {error:err}=await (s as any).from("answers").insert({question_id:question.id,attendee_id:attendeeId,event_id:eventId,option_id:optionId||null,answer_text:answerText||null,response_time_ms:responseTimeMs})
+    if(err){if(err.code==="23505")setAnswered(prev=>({...prev,[question.id]:{optionId,answerText}}));else setError("Error al enviar.")}
+    else setAnswered(prev=>({...prev,[question.id]:{optionId,answerText}}))
+    setSending(false)
+  }
+
+  if(!attendeeId)return null
+
+  const correct=isCorrect()
+  const timePercent=question?((timeLeft||0)/(question.time_limit_seconds||60))*100:0
+  const timeColor=timeLeft!==null&&timeLeft<=10?"text-red-600":timeLeft!==null&&timeLeft<=30?"text-yellow-500":"text-indigo-600"
+  const barColor=timeLeft!==null&&timeLeft<=10?"bg-red-500":timeLeft!==null&&timeLeft<=30?"bg-yellow-500":"bg-green-500"
+
+  if(allClosed){return(
+    <div className="min-h-screen bg-[#0f0f1a] text-white flex flex-col">
+      <header className="bg-indigo-700 px-4 py-3 text-center"><p className="text-sm font-medium">🎓 CapacitApp</p></header>
+      <main className="flex-1 flex flex-col items-center justify-center p-4">
+        <h2 className="text-3xl font-bold mb-1 text-center">🏆 Podio Final</h2>
+        <p className="text-white/50 text-sm mb-8">Resultados de la capacitacion</p>
+        {ranking.length===0?<p className="text-white/50">Calculando...</p>:(
+          <div className="w-full max-w-sm space-y-3">
+            {ranking.map((item,i)=>(
+              <div key={i} className={"rounded-2xl p-4 flex items-center gap-3 border "+(i===0?"border-yellow-500/50 bg-yellow-500/10":i===1?"border-slate-400/50 bg-slate-400/10":i===2?"border-orange-500/50 bg-orange-500/10":"border-white/10 bg-white/5")}>
+                <span className="text-3xl w-10 text-center">{i===0?"🥇":i===1?"🥈":i===2?"🥉":(i+1)}</span>
+                <div className="flex-1"><p className="font-bold text-white">{item.apellido}, {item.nombre}</p><p className="text-white/50 text-xs">{item.correct} correctas</p></div>
+                <div className="text-right"><p className="text-xl font-bold text-indigo-300">{item.points}</p><p className="text-white/50 text-xs">pts</p></div>
+              </div>
+            ))}
+          </div>
+        )}
+      </main>
+    </div>
+  )}
+
+  if(!question&&lastQuestion&&!allClosed){return(
+    <div className="min-h-screen bg-slate-50 flex flex-col">
+      <header className="bg-indigo-700 text-white px-4 py-3 text-center"><p className="text-sm font-medium">🎓 CapacitApp</p></header>
+      <main className="flex-1 flex items-center justify-center p-4">
+        <div className="text-center px-4 w-full max-w-sm">
+          {alreadyAnswered?(
+            <div>
+              <div className="text-6xl mb-4">{correct?"🎉":"😔"}</div>
+              <h2 className={"text-2xl font-bold mb-2 "+(correct?"text-green-600":"text-red-500")}>{correct?"¡Correcto!":"Incorrecto"}</h2>
+              {!correct&&<div className="mt-4 bg-green-50 border border-green-200 rounded-xl p-4"><p className="text-sm text-green-700">La respuesta correcta era:</p>{lastQuestion.question_options?.filter((o:any)=>o.is_correct).map((o:any)=><p key={o.id} className="text-green-800 font-bold mt-1">{o.text}</p>)}</div>}
+            </div>
+          ):<div><div className="text-6xl mb-4">⏰</div><h2 className="text-2xl font-bold text-red-500">¡Tiempo!</h2><p className="text-slate-500 mt-2">No respondiste a tiempo</p></div>}
+          <p className="text-slate-400 text-sm mt-6">Espera la proxima pregunta...</p>
+        </div>
+      </main>
+    </div>
+  )}
+
   return(
-    <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-indigo-800 to-purple-900 flex items-center justify-center p-4">
-      <div className="w-full max-w-sm">
-        <div className="text-center mb-8">
-          <span className="text-5xl">🎓</span>
-          <h1 className="text-2xl font-bold text-white mt-2">Registrarse</h1>
-          <p className="text-indigo-200 text-sm mt-1">Completa tus datos para ingresar</p>
-        </div>
-        <div className="bg-white rounded-2xl shadow-2xl p-6">
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Legajo</label>
-              <input value={legajo} onChange={e=>setLegajo(e.target.value)} type="text" className="w-full border border-slate-200 rounded-lg px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Tu numero de legajo" required/>
+    <div className="min-h-screen bg-slate-50 flex flex-col">
+      <header className="bg-indigo-700 text-white px-4 py-3 text-center"><p className="text-sm font-medium">🎓 CapacitApp</p></header>
+      <main className="flex-1 flex items-center justify-center p-4">
+        {loading?<p className="text-slate-500">Cargando...</p>
+        :!question?<div className="text-center"><div className="text-5xl mb-4">⏳</div><h2 className="text-xl font-bold text-slate-700">Esperando pregunta</h2></div>
+        :question.is_closed||timeLeft===0?(
+          <div className="text-center px-4 w-full max-w-sm">
+            {alreadyAnswered?(
+              <div>
+                <div className="text-6xl mb-4">{correct?"🎉":"😔"}</div>
+                <h2 className={"text-2xl font-bold mb-2 "+(correct?"text-green-600":"text-red-500")}>{correct?"¡Correcto!":"Incorrecto"}</h2>
+                {!correct&&<div className="mt-4 bg-green-50 border border-green-200 rounded-xl p-4"><p className="text-sm text-green-700">La respuesta correcta era:</p>{question.question_options?.filter((o:any)=>o.is_correct).map((o:any)=><p key={o.id} className="text-green-800 font-bold mt-1">{o.text}</p>)}</div>}
+              </div>
+            ):<div><div className="text-6xl mb-4">⏰</div><h2 className="text-2xl font-bold text-red-500">¡Tiempo!</h2></div>}
+            <p className="text-slate-400 text-sm mt-6">Espera la proxima pregunta...</p>
+          </div>
+        ):alreadyAnswered?(
+          <div className="text-center px-4">
+            <div className="text-5xl mb-4">✅</div>
+            <h2 className="text-xl font-bold text-green-700">¡Respuesta enviada!</h2>
+            {timeLeft!==null&&<p className={"text-5xl font-black mt-4 "+timeColor}>{timeLeft}s</p>}
+          </div>
+        ):(
+          <div className="w-full max-w-sm">
+            {timeLeft!==null&&(
+              <div className="mb-4 text-center">
+                <p className={"text-5xl font-black mb-2 "+timeColor}>{timeLeft}s</p>
+                <div className="h-3 bg-slate-200 rounded-full overflow-hidden">
+                  <div className={"h-full "+barColor+" rounded-full transition-all duration-1000"} style={{width:timePercent+"%"}}/>
+                </div>
+              </div>
+            )}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+              {question.image_url&&<img src={question.image_url} alt="" className="w-full rounded-xl mb-4 max-h-48 object-cover"/>}
+              <p className="text-slate-800 font-semibold text-base mb-5 leading-snug">{question.text}</p>
+              <div className="space-y-3">
+                {question.type==="true_false"?(
+                  <>
+                    <button onClick={()=>{setSelected("true");handleAnswer(undefined,"true")}} disabled={sending||!!selected} className={"w-full border-2 rounded-xl py-3 px-4 font-medium text-sm text-left "+(selected==="true"?"bg-green-600 text-white border-green-600":"bg-white text-green-700 border-green-300")}>✅ Verdadero</button>
+                    <button onClick={()=>{setSelected("false");handleAnswer(undefined,"false")}} disabled={sending||!!selected} className={"w-full border-2 rounded-xl py-3 px-4 font-medium text-sm text-left "+(selected==="false"?"bg-red-500 text-white border-red-500":"bg-white text-red-600 border-red-300")}>❌ Falso</button>
+                  </>
+                ):question.question_options?.sort((a:any,b:any)=>a.order_num-b.order_num).map((opt:any)=>(
+                  <button key={opt.id} onClick={()=>{setSelected(opt.id);handleAnswer(opt.id)}} disabled={sending||!!selected} className={"w-full border-2 rounded-xl py-3 px-4 font-medium text-sm text-left "+(selected===opt.id?"bg-indigo-600 text-white border-indigo-600":"bg-white text-slate-700 border-slate-200")}>{opt.text}</button>
+                ))}
+              </div>
+              {error&&<div className="mt-3 text-red-600 text-sm">{error}</div>}
             </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">DNI</label>
-              <input value={dni} onChange={e=>setDni(e.target.value)} type="text" className="w-full border border-slate-200 rounded-lg px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Sin puntos ni espacios" required/>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Nombre</label>
-              <input value={nombre} onChange={e=>setNombre(e.target.value)} type="text" className="w-full border border-slate-200 rounded-lg px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Tu nombre" required/>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Apellido</label>
-              <input value={apellido} onChange={e=>setApellido(e.target.value)} type="text" className="w-full border border-slate-200 rounded-lg px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Tu apellido" required/>
-            </div>
-            {error&&<div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">⚠️ {error}</div>}
-            <button type="submit" disabled={loading} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl disabled:opacity-50">{loading?"Cargando...":"Ingresar a la capacitacion"}</button>
-          </form>
-        </div>
-      </div>
+          </div>
+        )}
+      </main>
     </div>
   )
 }
