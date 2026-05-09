@@ -17,25 +17,31 @@ export default function EventoPage({params}: {params: Promise<{eventId: string}>
     e.preventDefault()
     setError("")
     setLoading(true)
-    const supabase = createClient()
-    const {data: events} = await supabase.from("events").select("id,is_active,max_attendees").eq("id", eventId).limit(1)
-    const event = events && events.length > 0 ? events[0] as {id:string;is_active:boolean;max_attendees:number} : null
-    if(!event){setError("Evento no encontrado.");setLoading(false);return}
-    if(!event.is_active){setError("Este evento no esta activo.");setLoading(false);return}
-    const {error: insertError} = await supabase.from("attendees").insert({event_id:eventId,legajo:legajo.trim(),dni:dni.trim(),nombre:nombre.trim(),apellido:apellido.trim()})
-    if(insertError){
-      if(insertError.code==="23505"){
-        if(insertError.message.includes("dni"))setError("Este DNI ya esta registrado.")
-        else if(insertError.message.includes("legajo"))setError("Este legajo ya esta registrado.")
-        else setError("Ya estas registrado en este evento.")
-      }else setError("Error al registrarse: "+insertError.message)
-      setLoading(false);return
+    try {
+      const supabase = createClient()
+      const {data: events} = await supabase.from("events").select("id,is_active,max_attendees").eq("id", eventId).limit(1)
+      const event = events && events.length > 0 ? events[0] as {id:string;is_active:boolean;max_attendees:number} : null
+      if(!event){setError("Evento no encontrado.");setLoading(false);return}
+      if(!event.is_active){setError("Este evento no esta activo.");setLoading(false);return}
+      const {error: insertError} = await supabase.from("attendees").insert({event_id:eventId,legajo:legajo.trim(),dni:dni.trim(),nombre:nombre.trim(),apellido:apellido.trim()})
+      if(insertError){
+        if(insertError.code==="23505"){
+          if(insertError.message.includes("dni"))setError("Este DNI ya esta registrado.")
+          else if(insertError.message.includes("legajo"))setError("Este legajo ya esta registrado.")
+          else setError("Ya estas registrado en este evento.")
+        }else setError("Error al registrarse: "+insertError.message)
+        setLoading(false);return
+      }
+      const {data: attData} = await supabase.from("attendees").select("id").eq("event_id",eventId).eq("dni",dni.trim()).limit(1)
+      if(attData&&attData.length>0){
+        sessionStorage.setItem("attendee_"+eventId,(attData[0] as {id:string}).id)
+      }
+      setLoading(false)
+      router.push("/evento/"+eventId+"/juego")
+    } catch(err) {
+      setError("Error de conexion. Intentá de nuevo.")
+      setLoading(false)
     }
-    const {data: attData} = await supabase.from("attendees").select("id").eq("event_id",eventId).eq("dni",dni.trim()).limit(1)
-    if(attData&&attData.length>0){
-      sessionStorage.setItem("attendee_"+eventId,(attData[0] as {id:string}).id)
-    }
-    router.push("/evento/"+eventId+"/juego")
   }
 
   return(
