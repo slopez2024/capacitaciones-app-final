@@ -23,7 +23,7 @@ export function useActiveQuestion(eventId:string){
   }
   useEffect(()=>{
     fetchState()
-    const interval=setInterval(fetchState,1000)
+    const interval=setInterval(fetchState,3000)
     return()=>clearInterval(interval)
   },[eventId])
   return {question,closedQuestion,allDone,loading,refetch:fetchState}
