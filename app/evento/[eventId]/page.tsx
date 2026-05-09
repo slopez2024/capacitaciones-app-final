@@ -37,7 +37,7 @@ export default function EventoPage({params}: {params: Promise<{eventId: string}>
         sessionStorage.setItem("attendee_"+eventId,(attData[0] as {id:string}).id)
       }
       setLoading(false)
-      router.push("/evento/"+eventId+"/juego")
+      window.location.href="/evento/"+eventId+"/juego"
     } catch(err) {
       setError("Error de conexion. Intentá de nuevo.")
       setLoading(false)
